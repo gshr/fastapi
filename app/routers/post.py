@@ -7,24 +7,34 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import time
 from ..database import engine,get_db
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from .. import models,outh2
-from ..schemas import Post,CreatePost,PostResponse
+from ..schemas import Post,CreatePost,PostResponse,PostVoteResponse
 router = APIRouter(
     prefix='/posts',
     tags=['Posts']
 )
 
-@router.get("/",response_model=List[PostResponse])
-async def get_posts(db:Session =Depends(get_db),current_user:int=Depends(outh2.current_user)):
-    posts=db.query(models.Post).all()
-    return posts
+@router.get("/",response_model=List[PostVoteResponse])
+
+async def get_posts(limit:int=5,skip:int=0,search:Optional[str]='',db:Session =Depends(get_db),current_user:int=Depends(outh2.current_user)):
+    posts=db.query(models.Post).filter(
+        models.Post.title.contains(search)).limit(
+            limit).offset(skip).all()
+        
+    results = db.query(models.Post,func.count(models.Vote.post_id).label('votes')).join(
+        models.Vote,models.Vote.post_id == models.Post.id,isouter=True).group_by(
+            models.Post.id).filter(models.Post.title.contains(search)).limit(limit).offset(skip).all()
+    return results
 
 
-@router.get("/{id}",response_model=PostResponse)   #{id} is path parameter
+@router.get("/{id}",response_model=PostVoteResponse)   #{id} is path parameter
 async def get_post(id:int,db:Session =Depends(get_db),current_user:int=Depends(outh2.current_user)):
     print(current_user)
-    post=db.query(models.Post).filter(models.Post.id == id).first()
+    post= db.query(models.Post,func.count(models.Vote.post_id).label('votes')).join(
+        models.Vote,models.Vote.post_id == models.Post.id,isouter=True).group_by(
+            models.Post.id).filter(models.Post.id == id).first()
     if post:
             return post
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
@@ -75,3 +85,5 @@ async def create_post(post:CreatePost,db:Session =Depends(get_db),current_user:i
     db.commit()
     db.refresh(new_post)
     return new_post
+
+
