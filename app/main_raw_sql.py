@@ -46,7 +46,7 @@ async def get_post(id:int,response:Response):
     query = f"SELECT * FROM posts WHERE  id = {id}"
     cursor.execute(query)
     post=cursor.fetchone()
-    
+
     if post:
             return {"data": post}
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
